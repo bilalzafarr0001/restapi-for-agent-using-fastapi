@@ -22,6 +22,8 @@ app/
 
 Read them in this order. Each file only uses the one below it.
 
+`frontend.py` is a separate chat page (built with **Streamlit**). It talks to the API over HTTP, like any other client.
+
 ## How one request flows
 
 Say you send `POST /agents/search/chat` with `{"message": "What is the latest version of FastAPI?"}`:
@@ -58,6 +60,14 @@ uv run fastapi dev app/main.py   # 3. Start the server
 
 Then open **http://127.0.0.1:8000/docs** in your browser. You can try every endpoint there.
 
+**Chat page:** keep the server running, and in a second terminal:
+
+```bash
+uv run streamlit run frontend.py
+```
+
+It opens **http://localhost:8501**: pick an agent, type a message, and the answer appears word by word.
+
 API keys (all have a free tier):
 - Groq: https://console.groq.com/keys
 - Serper: https://serper.dev/api-keys
@@ -70,6 +80,7 @@ API keys (all have a free tier):
 | POST   | `/chat`                     | **Easiest:** send any message, the assistant picks the tools |
 | GET    | `/agents`                   | Lists the agents                    |
 | POST   | `/agents/{agent_name}/chat` | Sends a message to one specific agent |
+| POST   | `/agents/{agent_name}/chat/stream` | Same, but streams the answer as plain text while the LLM writes it. The `thread_id` is in the `X-Thread-Id` header. |
 
 Request:
 

@@ -1,7 +1,9 @@
 import httpx
 from fastapi.testclient import TestClient
+from langchain.messages import AIMessageChunk, ToolMessage
 
 from app import tools
+from app.agents import AGENTS
 from app.main import app
 
 client = TestClient(app)
@@ -21,6 +23,20 @@ def test_chat_endpoint_exists():
 def test_unknown_agent_returns_404():
     response = client.post("/agents/cooking/chat", json={"message": "hi"})
     assert response.status_code == 404
+
+
+def test_chat_stream(monkeypatch):
+    # A fake agent that streams its answer in pieces, so the test needs no LLM.
+    class FakeAgent:
+        def stream(self, input, config, stream_mode):
+            yield AIMessageChunk(content="Hello "), {}
+            yield ToolMessage(content="raw search results", tool_call_id="1"), {}  # Must not be sent.
+            yield AIMessageChunk(content="there!"), {}
+
+    monkeypatch.setitem(AGENTS, "fake", FakeAgent())
+    response = client.post("/agents/fake/chat/stream", json={"message": "hi"})
+    assert response.text == "Hello there!"
+    assert response.headers["X-Thread-Id"]
 
 
 def test_math_tools():
