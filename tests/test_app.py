@@ -1,3 +1,4 @@
+import httpx
 from fastapi.testclient import TestClient
 
 from app import tools
@@ -8,7 +9,7 @@ client = TestClient(app)
 
 def test_list_agents():
     response = client.get("/agents")
-    assert response.json() == ["search", "news", "math", "places", "assistant"]
+    assert response.json() == ["search", "news", "math", "places", "weather", "assistant"]
 
 
 def test_chat_endpoint_exists():
@@ -53,6 +54,23 @@ def test_places_search(monkeypatch):
 
     monkeypatch.setattr(tools, "call_serper", fake_call_serper)
     result = tools.places_search.invoke({"query": "biryani in Lahore"})
-    assert "Waqas Biryani House" in result
-    assert "Rating: 4.3 from 14000 reviews" in result
-    assert "Website: not listed" in result
+    assert "Waqas Biryani House, Hall Rd, Lahore, rating 4.3 (14000 reviews), phone 0300 1234567" in result
+    assert "Daleem e Khas Matka Biryani" in result
+
+
+def test_get_weather(monkeypatch):
+    # A fake WeatherAPI reply, so the test needs no internet.
+    fake_reply = {
+        "location": {"name": "Lahore", "country": "Pakistan"},
+        "current": {"temp_c": 27.1, "condition": {"text": "Partly cloudy"}},
+    }
+    monkeypatch.setattr(tools.httpx, "get", lambda url, params: httpx.Response(200, json=fake_reply))
+    result = tools.get_weather.invoke({"city": "Lahore"})
+    assert result == "Right now in Lahore, Pakistan: 27.1°C, Partly cloudy."
+
+
+def test_get_weather_unknown_city(monkeypatch):
+    fake_reply = {"error": {"code": 1006, "message": "No matching location found."}}
+    monkeypatch.setattr(tools.httpx, "get", lambda url, params: httpx.Response(400, json=fake_reply))
+    result = tools.get_weather.invoke({"city": "Nowhere"})
+    assert result == "Could not get the weather for Nowhere: No matching location found."

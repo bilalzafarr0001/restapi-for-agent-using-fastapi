@@ -1,21 +1,22 @@
 # Agents API
 
-A REST API (built with **FastAPI**) for five AI agents (built with **LangChain** and **LangGraph**). The LLM runs on **Groq**.
+A REST API (built with **FastAPI**) for six AI agents (built with **LangChain** and **LangGraph**). The LLM runs on **Groq**.
 
-| Agent    | What it does                          | Tools                                   |
-| -------- | ------------------------------------- | --------------------------------------- |
-| `search` | Answers questions using Google        | `web_search`, `read_webpage`            |
-| `news`   | Summarizes the latest news on a topic | `news_search`, `read_webpage`           |
-| `math`   | Solves math problems step by step     | `add`, `subtract`, `multiply`, `divide` |
-| `places` | Finds places on Google Maps           | `places_search`                         |
-| `assistant` | Answers anything: picks from **all** the tools above by itself | all of them |
+| Agent       | What it does                                         | Tools                                   |
+| ----------- | ---------------------------------------------------- | --------------------------------------- |
+| `search`    | Answers questions using Google                       | `web_search`, `read_webpage`            |
+| `news`      | Summarizes the latest news on a topic                | `news_search`, `read_webpage`           |
+| `math`      | Solves math problems step by step                    | `add`, `subtract`, `multiply`, `divide` |
+| `places`    | Finds places on Google Maps                          | `places_search`                         |
+| `weather`   | Current temperature and weather condition in a city  | `get_weather`                           |
+| `assistant` | Answers anything: picks from **all** the tools above | all of them                             |
 
 ## The code: 3 files
 
 ```
 app/
 ├── main.py     1. The API: receives your message, runs an agent, returns the answer
-├── agents.py   2. The 5 agents: each one is an LLM + tools + instructions
+├── agents.py   2. The 6 agents: each one is an LLM + tools + instructions
 └── tools.py    3. The tools: Python functions the agents can call
 ```
 
@@ -51,15 +52,16 @@ You need [uv](https://docs.astral.sh/uv/). It installs Python and the packages f
 
 ```bash
 uv sync                          # 1. Install the packages
-cp .env.example .env             # 2. Put your two API keys in .env
+cp .env.example .env             # 2. Put your three API keys in .env
 uv run fastapi dev app/main.py   # 3. Start the server
 ```
 
 Then open **http://127.0.0.1:8000/docs** in your browser. You can try every endpoint there.
 
-API keys (both have a free tier):
+API keys (all have a free tier):
 - Groq: https://console.groq.com/keys
 - Serper: https://serper.dev/api-keys
+- WeatherAPI: https://www.weatherapi.com/my/
 
 ## Endpoints
 
@@ -112,8 +114,10 @@ The tests use fake API keys and never call Groq or Serper.
 
 ## Good to know
 
-- **Model**: `qwen/qwen3.8-27b`. Groq marks it as a *preview* model, so it may be removed one day. If that happens, change the model name in `agents.py`. We don't use the `openai/gpt-oss` models: in these search agents they often try to call tools that don't exist (like `find` or `open`), and Groq rejects those replies.
+- **Model**: `openai/gpt-oss-20b`. To change it, edit one line in `agents.py`. `openai/gpt-oss-120b` is smarter, but each model has its own free daily limit (200,000 tokens per day). Sometimes gpt-oss calls a tool the wrong way and Groq rejects the reply; the agent then asks again (up to 2 more times).
+- **Limits per question**: an agent reads at most 2 web pages and calls at most 6 tools for one question. This keeps answers fast and saves your free limits.
 - **Free tier limit**: Groq's free tier allows 8,000 tokens per minute. If you send many questions quickly, answers get slower (the app waits for the limit to reset), or you get a `502` error that mentions a rate limit.
 - **Memory**: conversations are kept in memory, so restarting the server forgets them.
 - **Serper credits**: a search costs 1 credit, reading a page costs 2.
+- **Weather**: the current temperature and condition, from [WeatherAPI.com](https://www.weatherapi.com). Needs `WEATHER_API_KEY` in `.env`.
 - **Errors**: if a search fails, the agent says so in its answer. If Groq fails (wrong key, rate limit), you get a `502` with the reason.
