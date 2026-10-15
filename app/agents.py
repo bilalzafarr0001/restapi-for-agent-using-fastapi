@@ -1,4 +1,4 @@
-"""The three agents.
+"""The agents.
 
 An agent = an LLM + tools + instructions (the system prompt).
 
@@ -14,7 +14,16 @@ from langchain.agents import create_agent
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import InMemorySaver
 
-from app.tools import add, divide, multiply, news_search, read_webpage, subtract, web_search
+from app.tools import (
+    add,
+    divide,
+    multiply,
+    news_search,
+    places_search,
+    read_webpage,
+    subtract,
+    web_search,
+)
 
 # Read GROQ_API_KEY and SERPER_API_KEY from the .env file.
 load_dotenv()
@@ -64,10 +73,24 @@ math_agent = create_agent(
     checkpointer=InMemorySaver(),
 )
 
+places_agent = create_agent(
+    model=llm,
+    tools=[places_search],
+    system_prompt="""You are a local guide that finds places on Google Maps.
+
+If the user didn't say which city or area, ask them first.
+Otherwise, always call places_search, even if you think you know the places.
+
+List the places as short bullet points. For each place, give its name, address,
+rating and number of reviews, and its phone number or website if it has one.""",
+    checkpointer=InMemorySaver(),
+)
+
 
 # The API finds agents in this dictionary by name.
 AGENTS = {
     "search": search_agent,
     "news": news_agent,
     "math": math_agent,
+    "places": places_agent,
 }

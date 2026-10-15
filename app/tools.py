@@ -93,6 +93,37 @@ def read_webpage(url: str) -> str:
     return text
 
 
+@tool
+def places_search(query: str) -> str:
+    """Search Google Maps for places, like restaurants, shops, hotels or hospitals.
+
+    Put the city or area in the query, for example "biryani restaurants in Lahore".
+    Returns each place's name, category, address, rating, phone and website.
+    """
+    print(f"   [TOOL] places_search called with query: {query!r}")
+    try:
+        data = call_serper("https://google.serper.dev/places", {"q": query})
+    except httpx.HTTPError as error:
+        print(f"   [TOOL] places_search failed: {error}")
+        return f"The search failed: {error}"
+
+    places = data.get("places", [])
+    print(f"   [TOOL] places_search got {len(places)} places. Top ones:")
+    for place in places[:3]:
+        print(f"            {place['title']} (rating {place.get('rating', '-')})")
+
+    # Turn the top 5 places into plain text the LLM can read.
+    # Some places have no phone or website, so .get() gives a default instead.
+    text = ""
+    for place in places[:5]:
+        text += f"{place['title']} ({place.get('category', 'place')})\n"
+        text += f"Address: {place.get('address', 'not listed')}\n"
+        text += f"Rating: {place.get('rating', 'no rating')} from {place.get('ratingCount', 0)} reviews\n"
+        text += f"Phone: {place.get('phoneNumber', 'not listed')}\n"
+        text += f"Website: {place.get('website', 'not listed')}\n\n"
+    return text or "No places found."
+
+
 # ---------------------------------------------------------------------------
 # Math tools (plain Python, no API key needed)
 # ---------------------------------------------------------------------------

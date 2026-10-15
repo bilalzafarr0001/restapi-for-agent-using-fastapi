@@ -8,7 +8,7 @@ client = TestClient(app)
 
 def test_list_agents():
     response = client.get("/agents")
-    assert response.json() == ["search", "news", "math"]
+    assert response.json() == ["search", "news", "math", "places"]
 
 
 def test_unknown_agent_returns_404():
@@ -31,3 +31,22 @@ def test_web_search(monkeypatch):
     monkeypatch.setattr(tools, "call_serper", fake_call_serper)
     result = tools.web_search.invoke({"query": "fastapi"})
     assert "https://fastapi.tiangolo.com" in result
+
+
+def test_places_search(monkeypatch):
+    # A fake Serper reply. The second place has no phone or website, like many real places.
+    def fake_call_serper(url, payload):
+        return {
+            "places": [
+                {"title": "Waqas Biryani House", "address": "Hall Rd, Lahore", "rating": 4.3,
+                 "ratingCount": 14000, "category": "Biryani", "phoneNumber": "0300 1234567"},
+                {"title": "Daleem e Khas Matka Biryani", "address": "Raja Center, Lahore",
+                 "rating": 4.1, "ratingCount": 699, "category": "Biryani"},
+            ]
+        }
+
+    monkeypatch.setattr(tools, "call_serper", fake_call_serper)
+    result = tools.places_search.invoke({"query": "biryani in Lahore"})
+    assert "Waqas Biryani House" in result
+    assert "Rating: 4.3 from 14000 reviews" in result
+    assert "Website: not listed" in result

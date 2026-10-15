@@ -1,19 +1,20 @@
 # Agents API
 
-A REST API (built with **FastAPI**) for three AI agents (built with **LangChain** and **LangGraph**). The LLM runs on **Groq**.
+A REST API (built with **FastAPI**) for four AI agents (built with **LangChain** and **LangGraph**). The LLM runs on **Groq**.
 
 | Agent    | What it does                          | Tools                                   |
 | -------- | ------------------------------------- | --------------------------------------- |
 | `search` | Answers questions using Google        | `web_search`, `read_webpage`            |
 | `news`   | Summarizes the latest news on a topic | `news_search`, `read_webpage`           |
 | `math`   | Solves math problems step by step     | `add`, `subtract`, `multiply`, `divide` |
+| `places` | Finds places on Google Maps           | `places_search`                         |
 
 ## The code: 3 files
 
 ```
 app/
 ├── main.py     1. The API: receives your message, runs an agent, returns the answer
-├── agents.py   2. The 3 agents: each one is an LLM + tools + instructions
+├── agents.py   2. The 4 agents: each one is an LLM + tools + instructions
 └── tools.py    3. The tools: Python functions the agents can call
 ```
 
