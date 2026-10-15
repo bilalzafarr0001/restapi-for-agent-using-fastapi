@@ -5,11 +5,13 @@ Start the API first (uv run fastapi dev app/main.py), then in a second terminal:
 """
 
 import json
+import time
 
 import httpx
 import streamlit as st
 
 API_URL = "http://127.0.0.1:8000"
+TYPING_DELAY = 0.03  # Seconds to wait after each piece of the answer. Bigger number = slower typing.
 
 st.set_page_config(page_title="Agents Chat", page_icon="🤖")
 st.title("🤖 Agents Chat")
@@ -79,6 +81,7 @@ if question := st.chat_input("Type your message..."):
             elif event["type"] == "text":
                 answer += event["content"]
                 answer_area.markdown(answer + "▌")  # The typing effect.
+                time.sleep(TYPING_DELAY)  # Groq writes very fast, so slow down a little to make it easy to follow.
 
         tools_area.empty()  # The answer is ready: hide the tools.
         answer_area.markdown(answer)
