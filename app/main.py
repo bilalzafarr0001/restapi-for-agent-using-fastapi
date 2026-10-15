@@ -67,3 +67,9 @@ def chat(agent_name: str, request: ChatRequest) -> ChatResponse:
     print(answer)
     print("=============================================\n")
     return ChatResponse(answer=answer, thread_id=thread_id)
+
+
+@app.post("/chat")
+def chat_with_assistant(request: ChatRequest) -> ChatResponse:
+    """Send a message. No agent name needed: the assistant picks the right tools by itself."""
+    return chat("assistant", request)

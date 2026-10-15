@@ -8,7 +8,13 @@ client = TestClient(app)
 
 def test_list_agents():
     response = client.get("/agents")
-    assert response.json() == ["search", "news", "math", "places"]
+    assert response.json() == ["search", "news", "math", "places", "assistant"]
+
+
+def test_chat_endpoint_exists():
+    # POST /chat needs no agent name. (Calling it would use the real LLM, so we only check it exists.)
+    paths = client.get("/openapi.json").json()["paths"]
+    assert "post" in paths["/chat"]
 
 
 def test_unknown_agent_returns_404():

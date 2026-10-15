@@ -1,6 +1,6 @@
 # Agents API
 
-A REST API (built with **FastAPI**) for four AI agents (built with **LangChain** and **LangGraph**). The LLM runs on **Groq**.
+A REST API (built with **FastAPI**) for five AI agents (built with **LangChain** and **LangGraph**). The LLM runs on **Groq**.
 
 | Agent    | What it does                          | Tools                                   |
 | -------- | ------------------------------------- | --------------------------------------- |
@@ -8,13 +8,14 @@ A REST API (built with **FastAPI**) for four AI agents (built with **LangChain**
 | `news`   | Summarizes the latest news on a topic | `news_search`, `read_webpage`           |
 | `math`   | Solves math problems step by step     | `add`, `subtract`, `multiply`, `divide` |
 | `places` | Finds places on Google Maps           | `places_search`                         |
+| `assistant` | Answers anything: picks from **all** the tools above by itself | all of them |
 
 ## The code: 3 files
 
 ```
 app/
 ├── main.py     1. The API: receives your message, runs an agent, returns the answer
-├── agents.py   2. The 4 agents: each one is an LLM + tools + instructions
+├── agents.py   2. The 5 agents: each one is an LLM + tools + instructions
 └── tools.py    3. The tools: Python functions the agents can call
 ```
 
@@ -64,8 +65,9 @@ API keys (both have a free tier):
 
 | Method | Path                        | What it does                        |
 | ------ | --------------------------- | ----------------------------------- |
+| POST   | `/chat`                     | **Easiest:** send any message, the assistant picks the tools |
 | GET    | `/agents`                   | Lists the agents                    |
-| POST   | `/agents/{agent_name}/chat` | Sends a message, returns the answer |
+| POST   | `/agents/{agent_name}/chat` | Sends a message to one specific agent |
 
 Request:
 

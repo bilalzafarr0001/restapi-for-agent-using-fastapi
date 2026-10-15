@@ -86,6 +86,28 @@ rating and number of reviews, and its phone number or website if it has one.""",
     checkpointer=InMemorySaver(),
 )
 
+# One agent with ALL the tools. You don't pick an agent: the LLM reads each tool's
+# docstring and picks the right tools for your question by itself.
+assistant_agent = create_agent(
+    model=llm,
+    tools=[web_search, news_search, read_webpage, places_search, add, subtract, multiply, divide],
+    system_prompt="""You are a helpful assistant. Pick the tools that fit the question:
+- web_search: facts and up-to-date information from Google.
+- news_search: recent news on a topic.
+- read_webpage: read a page in full, from a search result link or a link the user gives you.
+- places_search: places on Google Maps, like restaurants or hospitals. If the user didn't
+  say which city or area, ask first.
+- add, subtract, multiply, divide: use these for every calculation.
+
+You can use several tools for one question. For facts that may have changed (prices,
+records, versions, who holds a job, anything "latest"), always search first, even if
+you think you know the answer. If no tool is needed (like "hi" or "thank you"), just answer.
+
+Answer clearly and briefly. If you used search results or web pages, end with a
+'Sources' list of the links, written as plain URLs.""",
+    checkpointer=InMemorySaver(),
+)
+
 
 # The API finds agents in this dictionary by name.
 AGENTS = {
@@ -93,4 +115,5 @@ AGENTS = {
     "news": news_agent,
     "math": math_agent,
     "places": places_agent,
+    "assistant": assistant_agent,
 }
