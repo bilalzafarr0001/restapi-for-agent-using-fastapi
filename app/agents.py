@@ -1,9 +1,10 @@
 import groq
 from dotenv import load_dotenv
 from langchain.agents import create_agent
-from langchain.agents.middleware import ModelRetryMiddleware, ToolCallLimitMiddleware, ToolRetryMiddleware
+from langchain.agents.middleware import ModelRetryMiddleware, ToolCallLimitMiddleware, ToolRetryMiddleware, wrap_tool_call
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.config import get_stream_writer
 
 from app.tools import (
     add,
@@ -34,12 +35,24 @@ page_limit = ToolCallLimitMiddleware(tool_name="read_webpage", run_limit=2)
 tool_limit = ToolCallLimitMiddleware(run_limit=6)
 
 
+@wrap_tool_call
+def announce_tool(request, handler):
+    """Tell the chat page which tool is starting, right before its body runs.
+
+    Tools blocked by page_limit or tool_limit never get here, so the page only shows tools that really ran.
+    """
+    tool_call = request.tool_call
+    get_stream_writer()({"id": tool_call["id"], "name": tool_call["name"], "input": tool_call["args"]})
+    return handler(request)
+
+
 def make_agent(tools: list, system_prompt: str):
     return create_agent(
         model=llm,
         tools=tools,
         system_prompt=system_prompt,
-        middleware=[llm_retry, tool_retry, page_limit, tool_limit],
+        # announce_tool comes before tool_retry, so a retried tool is announced only once.
+        middleware=[announce_tool, llm_retry, tool_retry, page_limit, tool_limit],
         checkpointer=InMemorySaver(),
     )
 

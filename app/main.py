@@ -1,9 +1,10 @@
+import json
 import sys
 import uuid
 import groq
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from langchain.messages import AIMessage
+from langchain.messages import AIMessage, ToolMessage
 from pydantic import BaseModel
 from app.agents import AGENTS
 
@@ -51,30 +52,45 @@ def chat(agent_name: str, request: ChatRequest) -> ChatResponse:
     return ChatResponse(answer=answer, thread_id=thread_id)
 
 
+def event(**fields) -> str:
+    """One message of the stream: a line of JSON."""
+    return json.dumps(fields) + "\n"
+
+
 @app.post("/agents/{agent_name}/chat/stream")
 def chat_stream(agent_name: str, request: ChatRequest) -> StreamingResponse:
-    """Like chat(), but sends the answer piece by piece, while the LLM is still writing it."""
+    """Like chat(), but streams what happens, live: each tool the agent runs, then the answer piece by piece."""
     if agent_name not in AGENTS:
         raise HTTPException(status_code=404, detail=f"No agent called '{agent_name}'. Choose one of: {list(AGENTS)}")
     agent = AGENTS[agent_name]
 
     thread_id = request.thread_id or str(uuid.uuid4())
 
-    def answer_pieces():
+    def events():
         try:
-            # stream_mode="messages" gives us each small piece of text as soon as the LLM writes it.
-            for message, _ in agent.stream(
+            # "custom" gives us what announce_tool (in agents.py) sends: a tool is starting.
+            # "messages" gives us each finished tool, and each small piece of text the LLM writes.
+            for mode, data in agent.stream(
                 {"messages": [{"role": "user", "content": request.message}]},
                 {"configurable": {"thread_id": thread_id}},
-                stream_mode="messages",
+                stream_mode=["custom", "messages"],
             ):
-                if isinstance(message, AIMessage) and message.content:  # Skip tool results: only the LLM's words.
-                    yield message.content
-        except groq.APIError as error:
-            yield f"\n\nGroq error: {error}"  # Too late for a 502: the answer has already started.
+                if mode == "custom":
+                    yield event(type="tool_start", **data)
+                    continue
 
-    # The body is now a stream of text, so the thread_id goes in a header.
-    return StreamingResponse(answer_pieces(), media_type="text/plain", headers={"X-Thread-Id": thread_id})
+                message, metadata = data
+                # Only the "tools" step really runs tools. A tool blocked by a limit gets its
+                # ToolMessage from the limit middleware instead, and is not shown.
+                if isinstance(message, ToolMessage) and metadata["langgraph_node"] == "tools":
+                    yield event(type="tool_end", id=message.tool_call_id, status=message.status, output=str(message.content)[:1000])
+                elif isinstance(message, AIMessage) and message.content:
+                    yield event(type="text", content=message.content)
+        except groq.APIError as error:
+            yield event(type="text", content=f"\n\nGroq error: {error}")  # Too late for a 502: the answer has already started.
+
+    # The body is now a stream of events, so the thread_id goes in a header.
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers={"X-Thread-Id": thread_id})
 
 
 @app.post("/chat")

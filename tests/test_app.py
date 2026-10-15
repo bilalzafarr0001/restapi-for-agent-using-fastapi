@@ -1,9 +1,15 @@
+import json
+
 import httpx
 from fastapi.testclient import TestClient
-from langchain.messages import AIMessageChunk, ToolMessage
+from langchain.agents import create_agent
+from langchain.agents.middleware import ToolCallLimitMiddleware
+from langchain.messages import AIMessage
+from langchain.tools import tool
+from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 
 from app import tools
-from app.agents import AGENTS
+from app.agents import AGENTS, announce_tool
 from app.main import app
 
 client = TestClient(app)
@@ -25,17 +31,37 @@ def test_unknown_agent_returns_404():
     assert response.status_code == 404
 
 
-def test_chat_stream(monkeypatch):
-    # A fake agent that streams its answer in pieces, so the test needs no LLM.
-    class FakeAgent:
-        def stream(self, input, config, stream_mode):
-            yield AIMessageChunk(content="Hello "), {}
-            yield ToolMessage(content="raw search results", tool_call_id="1"), {}  # Must not be sent.
-            yield AIMessageChunk(content="there!"), {}
+class FakeLLM(GenericFakeChatModel):
+    """Gives back the replies we wrote for it, instead of calling Groq."""
 
-    monkeypatch.setitem(AGENTS, "fake", FakeAgent())
-    response = client.post("/agents/fake/chat/stream", json={"message": "hi"})
-    assert response.text == "Hello there!"
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+
+def test_chat_stream_shows_the_tools_that_ran(monkeypatch):
+    @tool
+    def read_webpage(url: str) -> str:
+        """Open a web page."""
+        return f"text of {url}"
+
+    # The fake LLM asks to read 2 pages, but the page limit only allows 1.
+    llm = FakeLLM(messages=iter([
+        AIMessage(content="", tool_calls=[{"name": "read_webpage", "args": {"url": "a.com"}, "id": "1"},
+                                          {"name": "read_webpage", "args": {"url": "b.com"}, "id": "2"}]),
+        AIMessage(content="Done!"),
+    ]), disable_streaming=True)
+    page_limit = ToolCallLimitMiddleware(tool_name="read_webpage", run_limit=1)
+    agent = create_agent(model=llm, tools=[read_webpage], middleware=[announce_tool, page_limit])
+    monkeypatch.setitem(AGENTS, "fake", agent)
+
+    response = client.post("/agents/fake/chat/stream", json={"message": "read a.com and b.com"})
+    events = [json.loads(line) for line in response.text.splitlines()]
+    # Only a.com is shown: b.com was blocked, so that tool never ran.
+    assert events == [
+        {"type": "tool_start", "id": "1", "name": "read_webpage", "input": {"url": "a.com"}},
+        {"type": "tool_end", "id": "1", "status": "success", "output": "text of a.com"},
+        {"type": "text", "content": "Done!"},
+    ]
     assert response.headers["X-Thread-Id"]
 
 

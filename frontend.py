@@ -4,6 +4,8 @@ Start the API first (uv run fastapi dev app/main.py), then in a second terminal:
     uv run streamlit run frontend.py
 """
 
+import json
+
 import httpx
 import streamlit as st
 
@@ -39,13 +41,22 @@ for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+ICONS = {"running": "⏳", "success": "✅", "error": "❌"}
 
-def stream_answer(question: str):
-    """Send the question to the API and yield the answer piece by piece."""
+
+def tools_line(tools: dict) -> str:
+    """For example: "🔧 news_search ✅ · read_webpage ⏳"."""
+    return "🔧 " + " · ".join(f"{tool['name']} {ICONS[tool['status']]}" for tool in tools.values())
+
+
+def stream_events(question: str):
+    """Send the question to the API and yield what happens, one event at a time."""
     payload = {"message": question, "thread_id": st.session_state.thread_id}
     with httpx.stream("POST", f"{API_URL}/agents/{agent_name}/chat/stream", json=payload, timeout=120) as response:
         st.session_state.thread_id = response.headers["X-Thread-Id"]  # So the agent remembers follow-up questions.
-        yield from response.iter_text()
+        for line in response.iter_lines():
+            if line:
+                yield json.loads(line)
 
 
 if question := st.chat_input("Type your message..."):
@@ -54,5 +65,22 @@ if question := st.chat_input("Type your message..."):
         st.markdown(question)
 
     with st.chat_message("assistant"):
-        answer = st.write_stream(stream_answer(question))  # The typing effect.
+        tools_area = st.empty()  # The tools the agent uses. Only shown while the answer is being generated.
+        answer_area = st.empty()
+        tools, answer = {}, ""
+
+        for event in stream_events(question):
+            if event["type"] == "tool_start":
+                tools[event["id"]] = {"name": event["name"], "status": "running"}
+                tools_area.caption(tools_line(tools))
+            elif event["type"] == "tool_end":
+                tools[event["id"]]["status"] = event["status"]  # ✅ only once the tool has really finished.
+                tools_area.caption(tools_line(tools))
+            elif event["type"] == "text":
+                answer += event["content"]
+                answer_area.markdown(answer + "▌")  # The typing effect.
+
+        tools_area.empty()  # The answer is ready: hide the tools.
+        answer_area.markdown(answer)
+
     st.session_state.messages.append({"role": "assistant", "content": answer})
